@@ -1,0 +1,15 @@
+{
+  "domain": "climate_control",
+  "name": "Climate Control",
+  "codeowners": [
+    "@he110"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/he110/ha-climate-control",
+  "integration_type": "hub",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/he110/ha-climate-control/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0"
+}

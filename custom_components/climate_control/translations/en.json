@@ -1,0 +1,233 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Climate Control",
+        "description": "Creates the hub. Then add thermostats and actuators from the integration page."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured."
+    }
+  },
+  "config_subentries": {
+    "thermostat": {
+      "entry_type": "Thermostat",
+      "initiate_flow": {
+        "user": "Add thermostat",
+        "reconfigure": "Reconfigure"
+      },
+      "step": {
+        "user": {
+          "title": "Thermostat",
+          "description": "A virtual thermostat. Devices are attached to it separately, as actuators.",
+          "data": {
+            "name": "Name",
+            "sensor": "Temperature sensor",
+            "min_temp": "Minimum setpoint",
+            "max_temp": "Maximum setpoint",
+            "target_temp_step": "Setpoint step"
+          },
+          "sections": {
+            "presets": {
+              "name": "Presets",
+              "description": "A preset is offered in a season only if its temperature for that season is set. In the mid-season the range is [winter, summer]. «Sleep» also switches actuators to their night mode.",
+              "data": {
+                "home_heat": "Home — winter",
+                "home_cool": "Home — summer",
+                "away_heat": "Away — winter",
+                "away_cool": "Away — summer",
+                "sleep_heat": "Sleep — winter",
+                "sleep_cool": "Sleep — summer",
+                "eco_heat": "Eco — winter",
+                "eco_cool": "Eco — summer",
+                "comfort_heat": "Comfort — winter",
+                "comfort_cool": "Comfort — summer"
+              }
+            }
+          }
+        },
+        "reconfigure": {
+          "title": "Thermostat",
+          "description": "A virtual thermostat. Devices are attached to it separately, as actuators.",
+          "data": {
+            "name": "Name",
+            "sensor": "Temperature sensor",
+            "min_temp": "Minimum setpoint",
+            "max_temp": "Maximum setpoint",
+            "target_temp_step": "Setpoint step"
+          },
+          "sections": {
+            "presets": {
+              "name": "Presets",
+              "description": "A preset is offered in a season only if its temperature for that season is set. In the mid-season the range is [winter, summer]. «Sleep» also switches actuators to their night mode.",
+              "data": {
+                "home_heat": "Home — winter",
+                "home_cool": "Home — summer",
+                "away_heat": "Away — winter",
+                "away_cool": "Away — summer",
+                "sleep_heat": "Sleep — winter",
+                "sleep_cool": "Sleep — summer",
+                "eco_heat": "Eco — winter",
+                "eco_cool": "Eco — summer",
+                "comfort_heat": "Comfort — winter",
+                "comfort_cool": "Comfort — summer"
+              }
+            }
+          }
+        }
+      },
+      "error": {
+        "min_above_max": "Minimum must be below maximum."
+      },
+      "abort": {
+        "reconfigure_successful": "Saved."
+      }
+    },
+    "actuator": {
+      "entry_type": "Actuator",
+      "initiate_flow": {
+        "user": "Add actuator",
+        "reconfigure": "Reconfigure"
+      },
+      "step": {
+        "user": {
+          "title": "Actuator",
+          "description": "A real device and the thermostats it serves. A device serving several thermostats follows their average.",
+          "data": {
+            "name": "Name",
+            "entity_id": "Device",
+            "thermostats": "Thermostats",
+            "manage_mode": "Switch the device's HVAC mode",
+            "veto": "Overshoot veto"
+          },
+          "data_description": {
+            "manage_mode": "Off for devices whose mode means something else, e.g. a breezer (its mode is ventilation).",
+            "veto": "Stop boosting as soon as any linked thermostat overshoots by the start threshold."
+          }
+        },
+        "reconfigure": {
+          "title": "Actuator",
+          "description": "A real device and the thermostats it serves. A device serving several thermostats follows their average.",
+          "data": {
+            "name": "Name",
+            "entity_id": "Device",
+            "thermostats": "Thermostats",
+            "manage_mode": "Switch the device's HVAC mode",
+            "veto": "Overshoot veto"
+          },
+          "data_description": {
+            "manage_mode": "Off for devices whose mode means something else, e.g. a breezer (its mode is ventilation).",
+            "veto": "Stop boosting as soon as any linked thermostat overshoots by the start threshold."
+          }
+        },
+        "heat": {
+          "title": "{name}: winter (heating)",
+          "description": "What the device does in the heating season.",
+          "data": {
+            "idle": "While the gap is small",
+            "boost": "While boosting",
+            "start": "Start boosting at a gap of",
+            "stop": "Stop boosting at a gap of",
+            "min_on": "Minimum boost time",
+            "min_off": "Minimum pause between boosts",
+            "boost_fan_mode": "Fan speed while boosting",
+            "boost_preset": "Preset while boosting"
+          },
+          "data_description": {
+            "start": "Gap = how far the room lags behind the setpoint (averaged over the linked thermostats).",
+            "stop": "Must be lower than the start threshold."
+          }
+        },
+        "cool": {
+          "title": "{name}: summer (cooling)",
+          "description": "What the device does in the cooling season. It never receives a heating command here.",
+          "data": {
+            "idle": "While the gap is small",
+            "boost": "While boosting",
+            "start": "Start boosting at a gap of",
+            "stop": "Stop boosting at a gap of",
+            "min_on": "Minimum boost time",
+            "min_off": "Minimum pause between boosts",
+            "boost_fan_mode": "Fan speed while boosting",
+            "boost_preset": "Preset while boosting"
+          },
+          "data_description": {
+            "start": "Gap = how far the room lags behind the setpoint (averaged over the linked thermostats).",
+            "stop": "Must be lower than the start threshold."
+          }
+        },
+        "night": {
+          "title": "Night",
+          "description": "Applied while any linked thermostat is in the «Sleep» preset. The previous value is restored afterwards.",
+          "data": {
+            "night_preset": "Night preset",
+            "night_fan_mode": "Night fan speed",
+            "night_no_boost": "Do not boost at night"
+          }
+        }
+      },
+      "error": {
+        "no_thermostat_selected": "Pick at least one thermostat.",
+        "stop_above_start": "The stop threshold must be lower than the start threshold."
+      },
+      "abort": {
+        "no_thermostats": "Add a thermostat first.",
+        "reconfigure_successful": "Saved."
+      }
+    }
+  },
+  "selector": {
+    "idle": {
+      "options": {
+        "follow": "Follow the setpoint",
+        "off": "Off",
+        "ignore": "Leave alone"
+      }
+    },
+    "boost": {
+      "options": {
+        "none": "No boost",
+        "turn_on": "Just turn on",
+        "on_target": "Turn on with the setpoint",
+        "extreme": "Push to the device limit"
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "season": {
+        "name": "Season",
+        "state": {
+          "heat": "Winter (heating)",
+          "cool": "Summer (cooling)",
+          "heat_cool": "Mid-season (both)"
+        }
+      }
+    },
+    "switch": {
+      "boost_allowed": {
+        "name": "Boosters allowed"
+      }
+    },
+    "sensor": {
+      "actuator_status": {
+        "name": "Status",
+        "state": {
+          "no_demand": "No demand",
+          "conflict": "Conflict",
+          "idle": "Following",
+          "boost": "Boosting"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "mode_not_in_season": {
+      "message": "Mode {mode} is not available in season {season}."
+    },
+    "preset_not_available": {
+      "message": "Preset {preset} has no temperature for the current season."
+    }
+  }
+}
