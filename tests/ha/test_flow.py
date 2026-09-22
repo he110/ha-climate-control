@@ -226,3 +226,32 @@ async def test_renamed_thermostat_keeps_driving(hass: HomeAssistant) -> None:
     er.async_get(hass).async_update_entity("climate.kids", new_entity_id="climate.kids_renamed")
     await hass.async_block_till_done()
     assert entry.runtime_data.thermostats[sid].demand_fn is not None
+
+
+async def test_migration_keeps_options_flat(hass: HomeAssistant) -> None:
+    hass.states.async_set("sensor.t", "21.0")
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        version=1,
+        data={},
+        subentries_data=[
+            {
+                "subentry_id": "k",
+                "subentry_type": "thermostat",
+                "title": "K",
+                "unique_id": None,
+                "data": {"sensor": "sensor.t", **THERMOSTAT, "presets": {}},
+            },
+            {
+                "subentry_id": "a",
+                "subentry_type": "actuator",
+                "title": "S",
+                "unique_id": None,
+                "data": {"entity_id": "switch.s", "thermostats": ["k"]},
+            },
+        ],
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    assert set(entry.options) == {"actuators"}
