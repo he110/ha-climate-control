@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1
+
+- Removing a device from a thermostat also removes its status sensor instead of leaving it unavailable.
+
 ## 0.2.0
 
 - Devices are configured inside their thermostat (**Configure → Add / Edit / Remove device**) instead of

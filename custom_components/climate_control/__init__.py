@@ -7,6 +7,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 
 from .const import (
     CONF_ACTUATORS,
@@ -28,10 +29,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ClimateControlConfigEntr
     engine = Engine(hass, entry)
     entry.runtime_data = engine
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _remove_stale_status_sensors(hass, entry, engine)
     # Start after the entities exist: they register their demand with the engine.
     await engine.async_start()
     entry.async_on_unload(entry.add_update_listener(_async_reload))
     return True
+
+
+def _remove_stale_status_sensors(
+    hass: HomeAssistant, entry: ClimateControlConfigEntry, engine: Engine
+) -> None:
+    """A device detached from a thermostat leaves its status sensor in the registry: drop it."""
+    wanted = {f"{sid}_{act.entity_id}_status" for act in engine.actuators.values() for sid in act.thermostats}
+    registry = er.async_get(hass)
+    for reg in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg.domain == "sensor" and reg.unique_id.endswith("_status") and reg.unique_id not in wanted:
+            registry.async_remove(reg.entity_id)
 
 
 def _prune_orphans(hass: HomeAssistant, entry: ClimateControlConfigEntry) -> None:

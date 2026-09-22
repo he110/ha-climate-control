@@ -133,6 +133,8 @@ async def test_thermostat_and_devices(hass: HomeAssistant) -> None:
     await hass.config_entries.subentries.async_configure(result["flow_id"], {"entity_id": "climate.ac"})
     await hass.async_block_till_done()
     assert entry.options["actuators"]["climate.ac"]["thermostats"] == [bedroom]
+    # Its status sensor under the office is gone, not left behind as an orphan.
+    assert er.async_get(hass).async_get("sensor.office_hall_ac") is None
 
     # Removing the thermostat drops its devices that serve nobody else.
     hass.config_entries.async_remove_subentry(entry, office)
