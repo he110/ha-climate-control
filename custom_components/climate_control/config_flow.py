@@ -7,7 +7,6 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.components.climate import ATTR_FAN_MODES, ATTR_PRESET_MODES
 from homeassistant.config_entries import (
-    SOURCE_RECONFIGURE,
     ConfigEntry,
     ConfigFlow,
     ConfigFlowResult,
@@ -21,6 +20,7 @@ from homeassistant.helpers import selector
 
 from .const import (
     ACTUATOR_DOMAINS,
+    CONF_ACTUATORS,
     CONF_BOOST,
     CONF_BOOST_FAN_MODE,
     CONF_BOOST_PRESET,
@@ -48,14 +48,13 @@ from .const import (
     DEFAULT_STOP,
     DOMAIN,
     PRESETS,
-    SUBENTRY_ACTUATOR,
     SUBENTRY_THERMOSTAT,
 )
 from .logic import Boost, Direction, Idle
 
 
 class ClimateControlConfigFlow(ConfigFlow, domain=DOMAIN):
-    VERSION = 1
+    VERSION = 2
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
@@ -67,7 +66,7 @@ class ClimateControlConfigFlow(ConfigFlow, domain=DOMAIN):
     def async_get_supported_subentry_types(
         cls, config_entry: ConfigEntry
     ) -> dict[str, type[ConfigSubentryFlow]]:
-        return {SUBENTRY_THERMOSTAT: ThermostatSubentryFlow, SUBENTRY_ACTUATOR: ActuatorSubentryFlow}
+        return {SUBENTRY_THERMOSTAT: ThermostatSubentryFlow}
 
 
 def _number(minimum: float, maximum: float, step: float, unit: str | None = "°C") -> selector.NumberSelector:
@@ -87,16 +86,51 @@ def _suggest(values: dict[str, Any], key: str, default: Any = None) -> dict[str,
     return {} if value is None else {"suggested_value": value}
 
 
-# --- thermostat -------------------------------------------------------------------------------------
+# --- thermostat and its devices ------------------------------------------------------------------
+
+
+def _select(
+    key: str, options: list[str], *, multiple: bool = False, custom: bool = False
+) -> selector.SelectSelector:
+    config = selector.SelectSelectorConfig(
+        options=options, multiple=multiple, custom_value=custom, mode=selector.SelectSelectorMode.DROPDOWN
+    )
+    if not custom:
+        # Device-provided values (fan speeds, presets) are shown as is; our enums are translated.
+        config["translation_key"] = key
+    return selector.SelectSelector(config)
 
 
 class ThermostatSubentryFlow(ConfigSubentryFlow):
+    """A thermostat and, under «Reconfigure», the devices attached to it.
+
+    Devices are stored once per entity in the hub options: a device shared by two thermostats has one
+    set of settings, whichever thermostat it is edited from.
+    """
+
+    def __init__(self) -> None:
+        self._data: dict[str, Any] = {}
+        self._title = ""
+        self._entity = ""
+
+    # --- thermostat itself --------------------------------------------------------------------------
+
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         return await self._form("user", user_input, {})
 
     async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        options = ["settings", "add_device"]
+        if self._linked():
+            options += ["edit_device", "remove_device"]
+        return self.async_show_menu(
+            step_id="reconfigure",
+            menu_options=options,
+            description_placeholders={"name": self._get_reconfigure_subentry().title},
+        )
+
+    async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         sub = self._get_reconfigure_subentry()
-        return await self._form("reconfigure", user_input, {CONF_NAME: sub.title, **sub.data})
+        return await self._form("settings", user_input, {CONF_NAME: sub.title, **sub.data})
 
     async def _form(
         self, step_id: str, user_input: dict[str, Any] | None, current: dict[str, Any]
@@ -109,7 +143,7 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
             if data[CONF_MIN_TEMP] >= data[CONF_MAX_TEMP]:
                 errors["base"] = "min_above_max"
             else:
-                if self.source == SOURCE_RECONFIGURE:
+                if step_id == "settings":
                     return self.async_update_and_abort(
                         self._get_entry(), self._get_reconfigure_subentry(), title=title, data=data
                     )
@@ -143,86 +177,98 @@ class ThermostatSubentryFlow(ConfigSubentryFlow):
         )
         return self.async_show_form(step_id=step_id, data_schema=schema, errors=errors)
 
+    # --- devices -----------------------------------------------------------------------------------
 
-# --- actuator ---------------------------------------------------------------------------------------
+    @property
+    def _sid(self) -> str:
+        return self._get_reconfigure_subentry().subentry_id
 
+    def _actuators(self) -> dict[str, dict[str, Any]]:
+        return {k: dict(v) for k, v in (self._get_entry().options.get(CONF_ACTUATORS) or {}).items()}
 
-def _select(
-    key: str, options: list[str], *, multiple: bool = False, custom: bool = False
-) -> selector.SelectSelector:
-    config = selector.SelectSelectorConfig(
-        options=options, multiple=multiple, custom_value=custom, mode=selector.SelectSelectorMode.DROPDOWN
-    )
-    if not custom:
-        # Device-provided values (fan speeds, presets) are shown as is; our enums are translated.
-        config["translation_key"] = key
-    return selector.SelectSelector(config)
+    def _linked(self) -> dict[str, dict[str, Any]]:
+        return {k: v for k, v in self._actuators().items() if self._sid in v.get(CONF_THERMOSTATS, [])}
 
+    def _device_options(self, actuators: dict[str, dict[str, Any]]) -> list[selector.SelectOptionDict]:
+        return [selector.SelectOptionDict(value=k, label=v.get(CONF_NAME) or k) for k, v in actuators.items()]
 
-class ActuatorSubentryFlow(ConfigSubentryFlow):
-    """Four short steps: what and for whom → winter → summer → night."""
-
-    def __init__(self) -> None:
-        self._data: dict[str, Any] = {}
-        self._title = ""
+    def _others(self) -> str:
+        subs = self._get_entry().subentries
+        names = [subs[t].title for t in self._data.get(CONF_THERMOSTATS, []) if t != self._sid and t in subs]
+        return ", ".join(names)
 
     @property
     def _is_climate(self) -> bool:
-        return str(self._data.get(CONF_ENTITY, "")).startswith("climate.")
+        return self._entity.startswith("climate.")
 
     def _attr_options(self, attr: str) -> list[str]:
-        state = self.hass.states.get(self._data[CONF_ENTITY])
+        state = self.hass.states.get(self._entity)
         return [str(o) for o in (state.attributes.get(attr) or [])] if state else []
 
-    def _thermostat_options(self) -> list[selector.SelectOptionDict]:
-        return [
-            selector.SelectOptionDict(value=s.subentry_id, label=s.title)
-            for s in self._get_entry().subentries.values()
-            if s.subentry_type == SUBENTRY_THERMOSTAT
-        ]
-
-    async def async_step_user(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        if not self._thermostat_options():
-            return self.async_abort(reason="no_thermostats")
-        return await self._step_main("user", user_input)
-
-    async def async_step_reconfigure(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
-        if user_input is None and not self._data:
-            sub = self._get_reconfigure_subentry()
-            self._data = dict(sub.data)
-            self._title = sub.title
-        return await self._step_main("reconfigure", user_input)
-
-    async def _step_main(self, step_id: str, user_input: dict[str, Any] | None) -> SubentryFlowResult:
-        errors: dict[str, str] = {}
+    async def async_step_add_device(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         if user_input is not None:
-            if not user_input.get(CONF_THERMOSTATS):
-                errors[CONF_THERMOSTATS] = "no_thermostat_selected"
+            self._entity = user_input[CONF_ENTITY]
+            existing = self._actuators().get(self._entity)
+            if existing is not None:
+                # Already serves another thermostat: link it here and edit the shared settings.
+                self._data = existing
             else:
-                self._title = user_input.pop(CONF_NAME)
-                self._data.update(user_input)
-                return await self.async_step_heat()
-        current = {CONF_NAME: self._title, **self._data}
+                state = self.hass.states.get(self._entity)
+                self._data = {CONF_NAME: state.name if state else self._entity, CONF_THERMOSTATS: []}
+            if self._sid not in self._data[CONF_THERMOSTATS]:
+                self._data[CONF_THERMOSTATS] = [*self._data[CONF_THERMOSTATS], self._sid]
+            return await self.async_step_device()
         schema = vol.Schema(
             {
-                vol.Required(CONF_NAME, description=_suggest(current, CONF_NAME)): str,
-                vol.Required(
-                    CONF_ENTITY, description=_suggest(current, CONF_ENTITY)
-                ): selector.EntitySelector(selector.EntitySelectorConfig(domain=ACTUATOR_DOMAINS)),
-                vol.Required(
-                    CONF_THERMOSTATS, description=_suggest(current, CONF_THERMOSTATS)
-                ): selector.SelectSelector(
-                    selector.SelectSelectorConfig(
-                        options=self._thermostat_options(),
-                        multiple=True,
-                        mode=selector.SelectSelectorMode.LIST,
+                vol.Required(CONF_ENTITY): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain=ACTUATOR_DOMAINS, exclude_entities=list(self._linked())
                     )
-                ),
-                vol.Required(CONF_MANAGE_MODE, default=current.get(CONF_MANAGE_MODE, True)): bool,
-                vol.Required(CONF_VETO, default=current.get(CONF_VETO, True)): bool,
+                )
             }
         )
-        return self.async_show_form(step_id=step_id, data_schema=schema, errors=errors)
+        return self.async_show_form(step_id="add_device", data_schema=schema)
+
+    async def async_step_edit_device(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        if user_input is not None:
+            self._entity = user_input[CONF_ENTITY]
+            self._data = self._actuators()[self._entity]
+            return await self.async_step_device()
+        schema = vol.Schema(
+            {vol.Required(CONF_ENTITY): _select_options(self._device_options(self._linked()))}
+        )
+        return self.async_show_form(step_id="edit_device", data_schema=schema)
+
+    async def async_step_remove_device(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        if user_input is not None:
+            actuators = self._actuators()
+            data = actuators[user_input[CONF_ENTITY]]
+            data[CONF_THERMOSTATS] = [t for t in data.get(CONF_THERMOSTATS, []) if t != self._sid]
+            if not data[CONF_THERMOSTATS]:
+                del actuators[user_input[CONF_ENTITY]]
+            return self._save(actuators)
+        schema = vol.Schema(
+            {vol.Required(CONF_ENTITY): _select_options(self._device_options(self._linked()))}
+        )
+        return self.async_show_form(step_id="remove_device", data_schema=schema)
+
+    async def async_step_device(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_heat()
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAME, default=self._data.get(CONF_NAME, self._entity)): str,
+                vol.Required(CONF_MANAGE_MODE, default=self._data.get(CONF_MANAGE_MODE, True)): bool,
+                vol.Required(CONF_VETO, default=self._data.get(CONF_VETO, True)): bool,
+            }
+        )
+        others = self._others()
+        return self.async_show_form(
+            step_id="device",
+            data_schema=schema,
+            description_placeholders={"entity": self._entity, "shared": others or "—"},
+        )
 
     async def async_step_heat(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
         return await self._step_direction(Direction.HEAT, user_input, self.async_step_cool)
@@ -270,7 +316,7 @@ class ActuatorSubentryFlow(ConfigSubentryFlow):
             step_id=direction.value,
             data_schema=vol.Schema(fields),
             errors=errors,
-            description_placeholders={"name": self._title},
+            description_placeholders={"name": self._data.get(CONF_NAME, self._entity)},
         )
 
     async def async_step_night(self, user_input: dict[str, Any] | None = None) -> SubentryFlowResult:
@@ -290,12 +336,26 @@ class ActuatorSubentryFlow(ConfigSubentryFlow):
             ] = _select(CONF_NIGHT_FAN_MODE, fans, custom=True)
         fields[vol.Required(CONF_NIGHT_NO_BOOST, default=self._data.get(CONF_NIGHT_NO_BOOST, False))] = bool
         return self.async_show_form(
-            step_id="night", data_schema=vol.Schema(fields), description_placeholders={"name": self._title}
+            step_id="night",
+            data_schema=vol.Schema(fields),
+            description_placeholders={"name": self._data.get(CONF_NAME, self._entity)},
         )
 
     async def _finish(self) -> SubentryFlowResult:
-        if self.source == SOURCE_RECONFIGURE:
-            return self.async_update_and_abort(
-                self._get_entry(), self._get_reconfigure_subentry(), title=self._title, data=self._data
-            )
-        return self.async_create_entry(title=self._title, data=self._data)
+        actuators = self._actuators()
+        actuators[self._entity] = self._data
+        return self._save(actuators)
+
+    def _save(self, actuators: dict[str, dict[str, Any]]) -> SubentryFlowResult:
+        entry = self._get_entry()
+        # The hub's update listener reloads the entry: the engine picks the change up at once.
+        self.hass.config_entries.async_update_entry(
+            entry, options={**entry.options, CONF_ACTUATORS: actuators}
+        )
+        return self.async_abort(reason="reconfigure_successful")
+
+
+def _select_options(options: list[selector.SelectOptionDict]) -> selector.SelectSelector:
+    return selector.SelectSelector(
+        selector.SelectSelectorConfig(options=options, mode=selector.SelectSelectorMode.LIST)
+    )

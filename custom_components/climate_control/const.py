@@ -15,7 +15,7 @@ DOMAIN = "climate_control"
 PLATFORMS = [Platform.CLIMATE, Platform.SELECT, Platform.SENSOR, Platform.SWITCH]
 
 SUBENTRY_THERMOSTAT = "thermostat"
-SUBENTRY_ACTUATOR = "actuator"
+SUBENTRY_ACTUATOR = "actuator"  # v1 only, migrated into options
 
 # Thermostat subentry
 CONF_SENSOR = "sensor"
@@ -31,7 +31,8 @@ DEFAULT_MAX_TEMP = 35.0
 DEFAULT_STEP = 0.5
 DEFAULT_TARGET = {"heat": 21.0, "cool": 25.0, "heat_cool_low": 21.0, "heat_cool_high": 25.0}
 
-# Actuator subentry
+# Actuators: entry.options["actuators"][entity_id] = {...}
+CONF_ACTUATORS = "actuators"
 CONF_ENTITY = "entity_id"
 CONF_THERMOSTATS = "thermostats"
 CONF_MANAGE_MODE = "manage_mode"

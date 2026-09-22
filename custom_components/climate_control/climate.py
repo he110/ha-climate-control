@@ -112,12 +112,13 @@ class VirtualThermostat(ClimateEntity, RestoreEntity):
         self._mem = ThermostatMemory()
         self._current: float | None = None
         self._runtime = engine.thermostats[subentry_id]
-        self._runtime.demand_fn = self._demand
 
     # --- lifecycle -------------------------------------------------------------------------------
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
+        # Registered here, not in __init__: renaming the entity_id removes and re-adds the same object.
+        self._runtime.demand_fn = self._demand
         if (extra := await self.async_get_last_extra_data()) is not None:
             self._mem = ThermostatMemory.from_dict(extra.as_dict())
         self._update_current(self.hass.states.get(self._sensor))
@@ -276,7 +277,11 @@ class VirtualThermostat(ClimateEntity, RestoreEntity):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        return {"boosting_actuators": sorted(self._engine.actuators[a].title for a in self._runtime.boosting)}
+        return {
+            "boosting_actuators": sorted(
+                self._engine.actuators[a].title for a in self._runtime.boosting if a in self._engine.actuators
+            )
+        }
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
         if hvac_mode == HVACMode.OFF:

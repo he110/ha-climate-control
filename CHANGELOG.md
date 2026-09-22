@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0
+
+- Devices are configured inside their thermostat (**Configure → Add / Edit / Remove device**) instead of
+  being separate entries: the integration page shows one card per thermostat.
+- A device added to several thermostats is one shared actuator with one set of settings.
+- The status sensor of each device lives on its thermostat's device; no extra devices are created.
+- Existing actuators are migrated automatically.
+- Fix: renaming a thermostat's entity_id no longer detaches it from its devices.
+
 ## 0.1.0
 
 - Virtual thermostats (heat / cool / heat_cool) with presets per season.

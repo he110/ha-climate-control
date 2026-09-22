@@ -25,6 +25,7 @@ from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_SUPPORTED_FEATURES,
     ATTR_TEMPERATURE,
+    CONF_NAME,
     STATE_UNAVAILABLE,
     STATE_UNKNOWN,
 )
@@ -42,10 +43,10 @@ from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
 from .const import (
+    CONF_ACTUATORS,
     CONF_BOOST,
     CONF_BOOST_FAN_MODE,
     CONF_BOOST_PRESET,
-    CONF_ENTITY,
     CONF_IDLE,
     CONF_MANAGE_MODE,
     CONF_MIN_OFF,
@@ -62,7 +63,6 @@ from .const import (
     DOMAIN,
     EVALUATE_INTERVAL,
     STARTUP_DELAY,
-    SUBENTRY_ACTUATOR,
     SUBENTRY_THERMOSTAT,
 )
 from .logic import (
@@ -82,15 +82,15 @@ from .logic import (
 )
 
 if TYPE_CHECKING:
-    from homeassistant.config_entries import ConfigEntry, ConfigSubentry
+    from homeassistant.config_entries import ConfigEntry
 
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 UNAVAILABLE = (STATE_UNAVAILABLE, STATE_UNKNOWN)
 
 
-def signal_actuator(entry_id: str, subentry_id: str) -> str:
-    return f"{DOMAIN}_{entry_id}_{subentry_id}_actuator"
+def signal_actuator(entry_id: str, entity_id: str) -> str:
+    return f"{DOMAIN}_{entry_id}_{entity_id}_actuator"
 
 
 def signal_thermostat(entry_id: str, subentry_id: str) -> str:
@@ -132,12 +132,11 @@ class ThermostatRuntime:
 
     demand_fn: Callable[[], Demand | None] | None = None
     boost_allowed: bool = True
-    boosting: set[str] = field(default_factory=set)  # actuator subentry ids boosting for it
+    boosting: set[str] = field(default_factory=set)  # entity_ids of actuators boosting for it
 
 
 @dataclass
 class ActuatorRuntime:
-    subentry_id: str
     title: str
     entity_id: str
     thermostats: list[str]
@@ -160,10 +159,10 @@ class Engine:
         self.thermostats: dict[str, ThermostatRuntime] = {
             sid: ThermostatRuntime() for sid in thermostat_ids(entry)
         }
-        self.actuators: dict[str, ActuatorRuntime] = {}
-        for sub in entry.subentries.values():
-            if sub.subentry_type == SUBENTRY_ACTUATOR:
-                self.actuators[sub.subentry_id] = self._build_actuator(sub)
+        # Actuators live in the hub's options keyed by entity_id: a shared device is described once.
+        self.actuators: dict[str, ActuatorRuntime] = {
+            eid: self._build_actuator(eid, data) for eid, data in actuators_of(entry).items()
+        }
         self._store: Store[dict[str, Any]] = Store(hass, STORAGE_VERSION, f"{DOMAIN}.{entry.entry_id}")
         self._unsubs: list[Callable[[], None]] = []
         self._ready = False
@@ -172,12 +171,10 @@ class Engine:
             hass, _LOGGER, cooldown=1.0, immediate=False, function=self.async_evaluate
         )
 
-    def _build_actuator(self, sub: ConfigSubentry) -> ActuatorRuntime:
-        data = dict(sub.data)
+    def _build_actuator(self, entity_id: str, data: dict[str, Any]) -> ActuatorRuntime:
         return ActuatorRuntime(
-            subentry_id=sub.subentry_id,
-            title=sub.title,
-            entity_id=data[CONF_ENTITY],
+            title=data.get(CONF_NAME) or entity_id,
+            entity_id=entity_id,
             thermostats=[t for t in data.get(CONF_THERMOSTATS, []) if t in self.thermostats],
             config=actuator_config(data),
             manage_mode=bool(data.get(CONF_MANAGE_MODE, True)),
@@ -293,16 +290,16 @@ class Engine:
                 self._save()
             for tid in act.thermostats:
                 rt = self.thermostats[tid]
-                was = act.subentry_id in rt.boosting
+                was = act.entity_id in rt.boosting
                 if plan.status is Status.BOOST and not was:
-                    rt.boosting.add(act.subentry_id)
+                    rt.boosting.add(act.entity_id)
                     changed_thermostats.add(tid)
                 elif plan.status is not Status.BOOST and was:
-                    rt.boosting.discard(act.subentry_id)
+                    rt.boosting.discard(act.entity_id)
                     changed_thermostats.add(tid)
             act.plan = plan
             await self._apply(act, plan)
-            async_dispatcher_send(self.hass, signal_actuator(self.entry.entry_id, act.subentry_id))
+            async_dispatcher_send(self.hass, signal_actuator(self.entry.entry_id, act.entity_id))
         for tid in changed_thermostats:
             async_dispatcher_send(self.hass, signal_thermostat(self.entry.entry_id, tid))
 
@@ -422,6 +419,10 @@ class Engine:
                 if current == held.get("applied") and base and base in options and base != current:
                     out.append((key, base, service, {attr: base}))
         return out
+
+
+def actuators_of(entry: ConfigEntry) -> dict[str, dict[str, Any]]:
+    return dict(entry.options.get(CONF_ACTUATORS) or {})
 
 
 def thermostat_ids(entry: ConfigEntry) -> list[str]:

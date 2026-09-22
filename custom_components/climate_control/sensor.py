@@ -1,4 +1,8 @@
-"""What each actuator is doing and why — the place to look when the house behaves oddly."""
+"""What each actuator is doing and why — the place to look when the house behaves oddly.
+
+One sensor per (thermostat, actuator) link, on the thermostat's device: a room in one place.
+A shared actuator shows the same decision under each of its thermostats.
+"""
 
 from __future__ import annotations
 
@@ -7,12 +11,11 @@ from typing import Any
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, SUBENTRY_ACTUATOR
-from .engine import Engine, signal_actuator
+from .climate import thermostat_device
+from .engine import ActuatorRuntime, Engine, signal_actuator
 from .logic import Status
 
 
@@ -20,36 +23,39 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     engine: Engine = entry.runtime_data
-    for sub in entry.subentries.values():
-        if sub.subentry_type == SUBENTRY_ACTUATOR:
-            async_add_entities(
-                [ActuatorStatusSensor(engine, sub.subentry_id)], config_subentry_id=sub.subentry_id
-            )
+    for sid in engine.thermostats:
+        sub = entry.subentries[sid]
+        sensors = [
+            ActuatorStatusSensor(engine, act, sid, sub.title)
+            for act in engine.actuators.values()
+            if sid in act.thermostats
+        ]
+        if sensors:
+            async_add_entities(sensors, config_subentry_id=sid)
 
 
 class ActuatorStatusSensor(SensorEntity):
     _attr_has_entity_name = True
-    _attr_translation_key = "actuator_status"
     _attr_device_class = SensorDeviceClass.ENUM
     _attr_should_poll = False
+    _attr_icon = "mdi:hvac"
+    _attr_translation_key = "actuator_status"  # state names; the entity name is the actuator's
 
-    def __init__(self, engine: Engine, subentry_id: str) -> None:
+    def __init__(
+        self, engine: Engine, act: ActuatorRuntime, thermostat_id: str, thermostat_title: str
+    ) -> None:
         self._engine = engine
+        self._act = act
         self._attr_options = [s.value for s in Status]
-        self._act = engine.actuators[subentry_id]
-        self._attr_unique_id = f"{subentry_id}_status"
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, subentry_id)},
-            name=self._act.title,
-            manufacturer="Climate Control",
-            model="Actuator",
-        )
+        self._attr_name = act.title
+        self._attr_unique_id = f"{thermostat_id}_{act.entity_id}_status"
+        self._attr_device_info = thermostat_device(thermostat_id, thermostat_title)
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
             async_dispatcher_connect(
                 self.hass,
-                signal_actuator(self._engine.entry.entry_id, self._act.subentry_id),
+                signal_actuator(self._engine.entry.entry_id, self._act.entity_id),
                 self.async_write_ha_state,
             )
         )
@@ -61,12 +67,11 @@ class ActuatorStatusSensor(SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         plan = self._act.plan
-        thermostats = [
-            self._engine.entry.subentries[t].title
-            for t in self._act.thermostats
-            if t in self._engine.entry.subentries
-        ]
-        attrs: dict[str, Any] = {"entity": self._act.entity_id, "thermostats": thermostats}
+        subs = self._engine.entry.subentries
+        attrs: dict[str, Any] = {
+            "entity": self._act.entity_id,
+            "thermostats": [subs[t].title for t in self._act.thermostats if t in subs],
+        }
         if plan is not None:
             attrs |= {
                 "action": plan.action.value,

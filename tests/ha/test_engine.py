@@ -59,8 +59,9 @@ def _thermostat(sid: str, title: str, sensor: str) -> dict[str, Any]:
     }
 
 
-def _actuator(sid: str, title: str, data: dict[str, Any]) -> dict[str, Any]:
-    return {"subentry_id": sid, "subentry_type": "actuator", "title": title, "unique_id": None, "data": data}
+def _actuator(title: str, data: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    data = dict(data)
+    return data.pop("entity_id"), {"name": title, **data}
 
 
 class Calls:
@@ -139,16 +140,9 @@ async def house(hass: HomeAssistant):
     hass.states.async_set("switch.stove", "off")
     hass.states.async_set("climate.corridor_ac", "off", AC)
 
-    entry = MockConfigEntry(
-        domain=DOMAIN,
-        title="Climate Control",
-        data={},
-        subentries_data=[
-            _thermostat("office", "Office", "sensor.office_t"),
-            _thermostat("bedroom", "Bedroom", "sensor.bedroom_t"),
-            _thermostat("kids", "Kids", "sensor.kids_t"),
+    actuators = dict(
+        [
             _actuator(
-                "a_conv",
                 "Convector",
                 {
                     "entity_id": "climate.convector",
@@ -159,7 +153,6 @@ async def house(hass: HomeAssistant):
                 },
             ),
             _actuator(
-                "a_breezer",
                 "Breezer",
                 {
                     "entity_id": "climate.breezer",
@@ -171,7 +164,6 @@ async def house(hass: HomeAssistant):
                 },
             ),
             _actuator(
-                "a_stove",
                 "Stove",
                 {
                     "entity_id": "switch.stove",
@@ -182,7 +174,6 @@ async def house(hass: HomeAssistant):
                 },
             ),
             _actuator(
-                "a_ac",
                 "Corridor AC",
                 {
                     "entity_id": "climate.corridor_ac",
@@ -193,6 +184,18 @@ async def house(hass: HomeAssistant):
                     "cool": {"idle": "off", "boost": "on_target", **{**DIR, "start": 1.5}},
                 },
             ),
+        ]
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Climate Control",
+        version=2,
+        data={},
+        options={"actuators": actuators},
+        subentries_data=[
+            _thermostat("office", "Office", "sensor.office_t"),
+            _thermostat("bedroom", "Bedroom", "sensor.bedroom_t"),
+            _thermostat("kids", "Kids", "sensor.kids_t"),
         ],
     )
     entry.add_to_hass(hass)
@@ -237,7 +240,7 @@ async def test_boost_extreme_then_back(house) -> None:
     office = hass.states.get("climate.office")
     assert office.attributes["hvac_action"] == "heating"
     assert office.attributes["boosting_actuators"] == ["Breezer"]
-    assert hass.states.get("sensor.breezer_status").state == "boost"
+    assert hass.states.get("sensor.office_breezer").state == "boost"
 
     hass.states.async_set("sensor.office_t", "22.6")
     log = await settle()
@@ -368,7 +371,7 @@ async def test_shared_ac_average_and_veto(house) -> None:
     hass.states.async_set("sensor.kids_t", "22.0")
     log = await settle()
     assert ("climate.corridor_ac", "set_hvac_mode", {"hvac_mode": "off"}) in log
-    assert hass.states.get("sensor.corridor_ac_status").attributes["reason"] == "overshoot veto"
+    assert hass.states.get("sensor.bedroom_corridor_ac").attributes["reason"] == "overshoot veto"
 
 
 async def test_restart_restores_boost_memory(hass: HomeAssistant, house) -> None:
@@ -379,5 +382,5 @@ async def test_restart_restores_boost_memory(hass: HomeAssistant, house) -> None
     assert await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
     engine = entry.runtime_data
-    assert engine.actuators["a_breezer"].boost.on
-    assert engine.actuators["a_breezer"].overrides["fan"] == {"base": "2", "applied": "7"}
+    assert engine.actuators["climate.breezer"].boost.on
+    assert engine.actuators["climate.breezer"].overrides["fan"] == {"base": "2", "applied": "7"}

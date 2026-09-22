@@ -21,7 +21,7 @@ stove, an AC — only while the room lags far behind, then hands control back.
 |---|---|
 | **Season** | One selector for the whole installation: *heating*, *cooling* or *mid-season* (a range, both directions). Thermostats only offer the season's mode, so nothing can cool in winter or heat in summer. |
 | **Thermostat** | A `climate` entity with a temperature sensor and presets (*home*, *away*, *sleep*, *eco*, *comfort*), each with a winter and a summer temperature. Comes with a *Boosters allowed* switch. |
-| **Actuator** | A real device (`climate`, `switch`, `fan`, `input_boolean`, `light`) attached to one or more thermostats. Comes with a *Status* sensor that tells what it does and why. |
+| **Device** | A real device (`climate`, `switch`, `fan`, `input_boolean`, `light`) attached to one or more thermostats from the thermostat's **Configure** menu. Each gets a *status* sensor on the thermostat that tells what it does and why. |
 
 For each season an actuator has two settings:
 
@@ -67,6 +67,6 @@ Climate Control never switches presets itself: use your own automations for that
 1. HACS → ⋮ → *Custom repositories* → `https://github.com/he110/ha-climate-control`, category *Integration*.
 2. Install **Climate Control**, restart Home Assistant.
 3. *Settings → Devices & services → Add integration → Climate Control*.
-4. On the integration page: **Add thermostat**, then **Add actuator** for each device.
+4. On the integration page: **Add thermostat**, then **Configure → Add device** on it for each device.
 
 Requires Home Assistant 2026.9 or newer.

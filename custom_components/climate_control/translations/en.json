@@ -15,7 +15,7 @@
       "entry_type": "Thermostat",
       "initiate_flow": {
         "user": "Add thermostat",
-        "reconfigure": "Reconfigure"
+        "reconfigure": "Configure"
       },
       "step": {
         "user": {
@@ -48,6 +48,15 @@
           }
         },
         "reconfigure": {
+          "title": "{name}",
+          "menu_options": {
+            "settings": "Thermostat settings",
+            "add_device": "Add device",
+            "edit_device": "Edit device",
+            "remove_device": "Remove device"
+          }
+        },
+        "settings": {
           "title": "Thermostat",
           "description": "A virtual thermostat. Devices are attached to it separately, as actuators.",
           "data": {
@@ -75,44 +84,32 @@
               }
             }
           }
-        }
-      },
-      "error": {
-        "min_above_max": "Minimum must be below maximum."
-      },
-      "abort": {
-        "reconfigure_successful": "Saved."
-      }
-    },
-    "actuator": {
-      "entry_type": "Actuator",
-      "initiate_flow": {
-        "user": "Add actuator",
-        "reconfigure": "Reconfigure"
-      },
-      "step": {
-        "user": {
-          "title": "Actuator",
-          "description": "A real device and the thermostats it serves. A device serving several thermostats follows their average.",
+        },
+        "add_device": {
+          "title": "Add device",
+          "description": "A device already attached to another thermostat is shared: its settings are common.",
           "data": {
-            "name": "Name",
-            "entity_id": "Device",
-            "thermostats": "Thermostats",
-            "manage_mode": "Switch the device's HVAC mode",
-            "veto": "Overshoot veto"
-          },
-          "data_description": {
-            "manage_mode": "Off for devices whose mode means something else, e.g. a breezer (its mode is ventilation).",
-            "veto": "Stop boosting as soon as any linked thermostat overshoots by the start threshold."
+            "entity_id": "Device"
           }
         },
-        "reconfigure": {
-          "title": "Actuator",
-          "description": "A real device and the thermostats it serves. A device serving several thermostats follows their average.",
+        "edit_device": {
+          "title": "Edit device",
+          "data": {
+            "entity_id": "Device"
+          }
+        },
+        "remove_device": {
+          "title": "Remove device",
+          "description": "Detaches the device from this thermostat. It keeps serving other thermostats, if any.",
+          "data": {
+            "entity_id": "Device"
+          }
+        },
+        "device": {
+          "title": "Device",
+          "description": "{entity}. Also serves: {shared}. A device serving several thermostats follows their average.",
           "data": {
             "name": "Name",
-            "entity_id": "Device",
-            "thermostats": "Thermostats",
             "manage_mode": "Switch the device's HVAC mode",
             "veto": "Overshoot veto"
           },
@@ -168,11 +165,10 @@
         }
       },
       "error": {
-        "no_thermostat_selected": "Pick at least one thermostat.",
+        "min_above_max": "Minimum must be below maximum.",
         "stop_above_start": "The stop threshold must be lower than the start threshold."
       },
       "abort": {
-        "no_thermostats": "Add a thermostat first.",
         "reconfigure_successful": "Saved."
       }
     }
