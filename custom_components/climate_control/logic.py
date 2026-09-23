@@ -49,6 +49,7 @@ class Action(StrEnum):
 
 
 class Status(StrEnum):
+    MANUAL = "manual"
     NO_DEMAND = "no_demand"
     CONFLICT = "conflict"
     IDLE = "idle"

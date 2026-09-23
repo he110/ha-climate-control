@@ -156,6 +156,7 @@ class Engine:
         self.hass = hass
         self.entry = entry
         self.season = Season.HEAT
+        self.automation = True
         self.thermostats: dict[str, ThermostatRuntime] = {
             sid: ThermostatRuntime() for sid in thermostat_ids(entry)
         }
@@ -246,6 +247,23 @@ class Engine:
             self.hass.async_create_task(self._debouncer.async_call(), eager_start=True)
 
     @callback
+    def set_automation(self, enabled: bool) -> None:
+        """The master switch: off hands every device back to the user, untouched."""
+        if enabled == self.automation:
+            return
+        self.automation = enabled
+        if not enabled:
+            for act in self.actuators.values():
+                # Forget what we told the device and what we held: the person is in charge now.
+                act.boost = BoostState()
+                act.sent.clear()
+                act.overrides.clear()
+            for rt in self.thermostats.values():
+                rt.boosting.clear()
+            self._save()
+        self.request_update()
+
+    @callback
     def set_season(self, season: Season) -> None:
         if season is self.season:
             return
@@ -278,6 +296,13 @@ class Engine:
     # --- evaluation ------------------------------------------------------------------------------
 
     async def async_evaluate(self) -> None:
+        if not self.automation:
+            for act in self.actuators.values():
+                act.plan = Plan(Status.MANUAL, reason="manual mode")
+                async_dispatcher_send(self.hass, signal_actuator(self.entry.entry_id, act.entity_id))
+            for tid in self.thermostats:
+                async_dispatcher_send(self.hass, signal_thermostat(self.entry.entry_id, tid))
+            return
         now = dt_util.utcnow().timestamp()
         changed_thermostats: set[str] = set()
         # Once per pass: a heat_cool thermostat updates its dead-band memory while computing.

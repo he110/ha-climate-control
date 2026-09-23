@@ -384,3 +384,29 @@ async def test_restart_restores_boost_memory(hass: HomeAssistant, house) -> None
     engine = entry.runtime_data
     assert engine.actuators["climate.breezer"].boost.on
     assert engine.actuators["climate.breezer"].overrides["fan"] == {"base": "2", "applied": "7"}
+
+
+async def test_master_switch_hands_devices_back(house) -> None:
+    hass, engine, settle = house
+    hass.states.async_set("sensor.office_t", "20.0")
+    await settle()
+    assert hass.states.get("sensor.office_breezer").state == "boost"
+
+    await hass.services.async_call(
+        "switch", "turn_off", {"entity_id": "switch.climate_control_automation"}, blocking=True
+    )
+    log = await settle()
+    assert log == []  # nothing is commanded, the breezer stays where it was
+    assert hass.states.get("sensor.office_breezer").state == "manual"
+    assert hass.states.get("climate.office").attributes["hvac_action"] == "idle"
+
+    # A change while in manual mode is ignored too.
+    hass.states.async_set("sensor.office_t", "18.0")
+    assert await settle() == []
+
+    await hass.services.async_call(
+        "switch", "turn_on", {"entity_id": "switch.climate_control_automation"}, blocking=True
+    )
+    log = await settle()
+    assert ("climate.breezer", "set_temperature", {"temperature": 25}) in log
+    assert hass.states.get("sensor.office_breezer").state == "boost"

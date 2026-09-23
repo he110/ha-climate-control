@@ -202,6 +202,9 @@
       }
     },
     "switch": {
+      "automation": {
+        "name": "Automation"
+      },
       "boost_allowed": {
         "name": "Boosters allowed"
       }
@@ -210,6 +213,7 @@
       "actuator_status": {
         "name": "Status",
         "state": {
+          "manual": "Manual mode",
           "no_demand": "No demand",
           "conflict": "Conflict",
           "idle": "Following",

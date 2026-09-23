@@ -21,6 +21,7 @@ stove, an AC — only while the room lags far behind, then hands control back.
 |---|---|
 | **Season** | One selector for the whole installation: *heating*, *cooling* or *mid-season* (a range, both directions). Thermostats only offer the season's mode, so nothing can cool in winter or heat in summer. |
 | **Thermostat** | A `climate` entity with a temperature sensor and presets (*home*, *away*, *sleep*, *eco*, *comfort*), each with a winter and a summer temperature. Comes with a *Boosters allowed* switch. |
+| **Automation** | A master switch on the hub. Turned off, the integration stops commanding anything and leaves every device as it is — manual mode for the whole house. |
 | **Device** | A real device (`climate`, `switch`, `fan`, `input_boolean`, `light`) attached to one or more thermostats from the thermostat's **Configure** menu. Each gets a *status* sensor on the thermostat that tells what it does and why. |
 
 For each season an actuator has two settings:

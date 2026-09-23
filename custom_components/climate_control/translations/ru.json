@@ -202,6 +202,9 @@
       }
     },
     "switch": {
+      "automation": {
+        "name": "Автоматизация"
+      },
       "boost_allowed": {
         "name": "Ускорители разрешены"
       }
@@ -210,6 +213,7 @@
       "actuator_status": {
         "name": "Состояние",
         "state": {
+          "manual": "Ручной режим",
           "no_demand": "Нет запроса",
           "conflict": "Конфликт",
           "idle": "В покое",

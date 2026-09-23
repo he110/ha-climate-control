@@ -6,7 +6,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_OFF
+from homeassistant.const import STATE_OFF, EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -14,17 +14,50 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .climate import thermostat_device
 from .const import SUBENTRY_THERMOSTAT
 from .engine import Engine
+from .select import hub_device
 
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddConfigEntryEntitiesCallback
 ) -> None:
     engine: Engine = entry.runtime_data
+    async_add_entities([AutomationSwitch(engine)])
     for sub in entry.subentries.values():
         if sub.subentry_type == SUBENTRY_THERMOSTAT:
             async_add_entities(
                 [BoostAllowedSwitch(engine, sub.subentry_id, sub.title)], config_subentry_id=sub.subentry_id
             )
+
+
+class AutomationSwitch(SwitchEntity, RestoreEntity):
+    """Master switch: off means the integration commands nothing until it is back on."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "automation"
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, engine: Engine) -> None:
+        self._engine = engine
+        self._attr_unique_id = f"{engine.entry.entry_id}_automation"
+        self._attr_device_info = hub_device(engine.entry)
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        self._engine.set_automation(not (last is not None and last.state == STATE_OFF))
+
+    @property
+    def is_on(self) -> bool:
+        return self._engine.automation
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        self._engine.set_automation(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        self._engine.set_automation(False)
+        self.async_write_ha_state()
 
 
 class BoostAllowedSwitch(SwitchEntity, RestoreEntity):

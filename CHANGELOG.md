@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.0
+
+- **Automation** master switch on the hub: off hands every device back to you and commands nothing
+  until it is on again. Devices are left exactly as they are; the status sensors read *manual mode*.
+
 ## 0.2.1
 
 - Removing a device from a thermostat also removes its status sensor instead of leaving it unavailable.
