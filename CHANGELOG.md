@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1
+
+- A restart, a reload or a settings change no longer repeats commands a device already obeys —
+  no more air conditioners beeping for nothing.
+
 ## 0.3.0
 
 - **Automation** master switch on the hub: off hands every device back to you and commands nothing

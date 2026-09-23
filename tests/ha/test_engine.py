@@ -365,7 +365,8 @@ async def test_shared_ac_average_and_veto(house) -> None:
     hass.states.async_set("sensor.kids_t", "26.0")
     log = await settle()
     assert ("climate.corridor_ac", "set_hvac_mode", {"hvac_mode": "cool"}) in log
-    assert ("climate.corridor_ac", "set_temperature", {"temperature": 24}) in log
+    # Its setpoint is the average of the two rooms; it already stands there, so no command is needed.
+    assert hass.states.get("climate.corridor_ac").attributes["temperature"] == 24
     # Kids overshoot by 2 (= start... veto uses start 1.5): stop at once although the average is 1.5.
     hass.states.async_set("sensor.bedroom_t", "29.0")
     hass.states.async_set("sensor.kids_t", "22.0")
@@ -407,6 +408,23 @@ async def test_master_switch_hands_devices_back(house) -> None:
     await hass.services.async_call(
         "switch", "turn_on", {"entity_id": "switch.climate_control_automation"}, blocking=True
     )
-    log = await settle()
-    assert ("climate.breezer", "set_temperature", {"temperature": 25}) in log
+    await settle()
     assert hass.states.get("sensor.office_breezer").state == "boost"
+    assert hass.states.get("climate.breezer").attributes["temperature"] == 25
+
+
+async def test_restart_does_not_repeat_commands_the_device_already_obeys(hass, house) -> None:
+    hass, engine, settle = house
+    hass.states.async_set("sensor.office_t", "20.0")
+    await settle()  # breezer pushed to its max at speed 7
+    entry = engine.entry
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+
+    engine = entry.runtime_data
+    calls = Calls(hass)
+    calls.register()
+    await engine.async_evaluate()
+    await hass.async_block_till_done()
+    # Everything is already where it should be: no beeping round of repeated commands.
+    assert calls.take() == []

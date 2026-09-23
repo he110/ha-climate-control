@@ -87,6 +87,27 @@ if TYPE_CHECKING:
 _LOGGER = logging.getLogger(__name__)
 STORAGE_VERSION = 1
 UNAVAILABLE = (STATE_UNAVAILABLE, STATE_UNKNOWN)
+_UNSET = object()
+
+
+def _device_already(key: str, value: Any, state: State) -> bool:
+    """Is the device already in the state this command would put it in?"""
+    attrs = state.attributes
+    match key:
+        case "power" | "mode":
+            if value == "off":
+                return state.state == "off"
+            if value == "on":
+                return state.state != "off"
+            return state.state == value
+        case "temperature":
+            current = attrs.get(ATTR_TEMPERATURE)
+            return current is not None and float(current) == float(value)
+        case "fan":
+            return attrs.get(ATTR_FAN_MODE) == value
+        case "preset":
+            return attrs.get(ATTR_PRESET_MODE) == value
+    return False
 
 
 def signal_actuator(entry_id: str, entity_id: str) -> str:
@@ -339,7 +360,12 @@ class Engine:
         commands += self._override_commands(act, plan, state)
         act.last_error = None
         for key, value, service, data in commands:
-            if act.sent.get(key, object()) == value:
+            if act.sent.get(key, _UNSET) == value:
+                continue
+            if key not in act.sent and _device_already(key, value, state):
+                # Fresh start or reload: a device that already sits where we want it is left alone,
+                # so a restart does not make every air conditioner beep.
+                act.sent[key] = value
                 continue
             svc_domain = (
                 "homeassistant" if service in ("turn_on", "turn_off") and domain != "climate" else domain
