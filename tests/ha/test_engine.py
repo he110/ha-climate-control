@@ -387,7 +387,7 @@ async def test_restart_restores_boost_memory(hass: HomeAssistant, house) -> None
 
 
 async def test_master_switch_hands_devices_back(house) -> None:
-    hass, engine, settle = house
+    hass, _engine, settle = house
     hass.states.async_set("sensor.office_t", "20.0")
     await settle()
     assert hass.states.get("sensor.office_breezer").state == "boost"
